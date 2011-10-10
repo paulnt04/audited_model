@@ -1,0 +1,65 @@
+= audited_record v1.0alpha
+
+Mocked Record Generator using acts_as_audited for logs.
+Stores in memory as an object and does not store to database.
+
+== Installation
+
+  gem install audited_record
+
+For audited models, change inheretance of the model class to 'MockedRecord'
+  class User < AuditedRecord
+    acts_as_audited
+  end
+
+In the application controller add:
+  class ApplicationController < ActionController::Base
+    extend AuditedController
+  end
+
+In config/routes.rb
+  match ':controller/deleted', :action => 'deleted_index', :as => :deleted_items
+  match ':controller/deleted/:id', :action => 'deleted_show', :as => :deleted_item
+  match ':controller/revisions', :action => 'revision_index', :as => :revisions
+  match ':controller/:id/revisions', :action => 'revision_show', :as => :item_revisions
+  match ':controller/:id/:action/:version, :contraints => {:action => /(revert|restore)/, :version => /\d+/}, :as => :revisioning
+
+Note: Not uploaded to rubygems yet (not until v1.0)
+
+== Usage
+
+  class User < MockedRecord
+    acts_as_audited
+  end
+
+  @user = User.create({:name => 'Test User', :email => 'test@example.com'}) # id = 1
+  @user.destroy
+  @record = User.mock(1)
+  @record # User(:name => 'Test User', :email => 'test@example.com', :id => 1)
+
+Model.mock takes one of 3 basic argument syntaxes, with the addition of an additional argument.
+
+  User.mock({:audit => Audit.find_by_auditable_type_and_auditable_id_and_version('User',1,1)}) # Allows you to specify the specific audit version to mock
+  User.mock({:id => 1, :version => 1}) # Allows you to specify the id of the record and version
+  User.mock(1) # Specify id of record and the latest version of record is mocked
+
+The additional argument is {:associated}. It is allowed only in the first two syntaxes above.
+:associated tells MockedRecord to generate the associated records or not. By default it does not.
+
+  User.mock({:audit => Audit.find(1), :associated => true})
+  User.mock({:id => 1, :version => 1, :associated => true})
+
+:associated still has issues. Will remove auditable_id from audits right now.
+
+You can also use the controller method and routes to view via
+http://<your_application_url>/:controller/deleted
+and individual records by
+http://<your_application_url>/:controller/deleted/:id
+
+== License
+
+Released under MIT. See LICENSE.rdoc
+
+== Copyright
+
+Copyright (c) 2011 Paul Panarese
