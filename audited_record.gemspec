@@ -2,15 +2,15 @@
 $:.push File.expand_path("../lib", __FILE__)
 
 Gem::Specification.new do |s|
-  s.name        = "mocked_record"
-  s.version     = "1.0"
+  s.name        = "audited_record"
+  s.version     = "1.0a"
   s.authors     = ["Paul Panarese"]
   s.email       = ["git@panjunction.com"]
   s.homepage    = ""
-  s.summary     = %q{Mocked Record Generator}
-  s.description = %q{Generates mocks of deleted records using acts_as_audited}
+  s.summary     = %q{Audited Record Generator}
+  s.description = %q{Generates mocks and manages revisions of records using acts_as_audited}
 
-  s.rubyforge_project = "mocked_record"
+  s.rubyforge_project = "audited_record"
 
   s.files         = `git ls-files`.split("\n")
   s.test_files    = `git ls-files -- {test,spec,features}/*`.split("\n")

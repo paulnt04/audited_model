@@ -28,4 +28,22 @@ class MockController
     end
   end
 
+  def revision_index
+
+  end
+
+  def revision_show
+
+  end
+
+  def revert
+    params[:controller].singularize.camelize.constantize.revert({:id => params[:id].to_i, :version => params[:version].to_i})
+    redirect_to(:controller => params[:controller], :action => 'show', :id => params[:id].to_i, :only_path => true)
+  end
+
+  def restore
+    params[:controller].singularize.camelize.constantize.restore({:id => params[:id], :version => params[:version]})
+    redirect_to(:controller => params[:controller], :action => 'show', :id => params[:id].to_i, :only_path => true)
+  end
+
 end

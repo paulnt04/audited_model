@@ -1,40 +1,11 @@
-class MockedRecord < ActiveRecord
+class AuditedRecord < ActiveRecord::Base
 
   self.abstract_class = true
 
   def self.mock params
     begin
-      mock = self.new
-      if !params[:audit].blank? && params.class.to_s =~ /hash/i
-        audit = params[:audit]
-      elsif !params[:id].blank? && params.class.to_s =~ /hash/i
-        if !params[:version].blank?
-          audit = Audit.find_by_auditable_type_and_auditable_id_and_version(self.to_s.underscore,params[:id],params[:version])
-        else
-          audit = Audit.find_by_auditable_type_and_auditable_id(self.to_s.underscore,params[:id], :order => "version DESC")
-        end
-      elsif !params.blank? && params.class.to_s =~ /Fixnum/i
-        audit = Audit.find_by_auditable_type_and_auditable_id(self.to_s.underscore,params.to_i, :order => "version DESC")
-      else
-        raise "Need to specify id or audit object."
-      end
-      if (self.find(audit.auditable_id.to_i) rescue false)
-        self.find(audit.auditable_id.to_i).attributes.reject{|k,v| k == "id"}.each do |attribute, value|
-          mock[attribute.to_sym] = value
-        end
-      end
-      records = Audit.find_all_by_auditable_id_and_auditable_type(audit.auditable_id,audit.auditable_type, :order => "version ASC")
-      records.reject!{|record| record.version > audit.version }
-      records.each do |record|
-        record.audited_changes.each do |key,value|
-          if record.action == "update"
-            mock[key.to_sym] = value[1]
-          else
-            mock[key.to_sym] = value
-          end
-        end
-      end
-      mock[:id] = audit.auditable_id
+      mock, _id = _generate_record(params)
+      mock[:id] = _id
       if params[:associated] == true
         mock.class.reflect_on_all_associations.each do |association|
         begin
@@ -92,7 +63,7 @@ class MockedRecord < ActiveRecord
 
   def save
     if self.mocked_record?
-      raise "MockedRecord: Method undefined."
+      raise TypeError, "AuditedRecord: Method undefined for mocked record."
     else
       super
     end
@@ -112,6 +83,99 @@ class MockedRecord < ActiveRecord
 
   def mocked_record?
     (self.new_record? && self.id) ? true : false
+  end
+
+  def restore(params)
+    if self.mocked_record? && !(self.class.try(:find, self.id) rescue false)
+      begin
+        _new = self.class.create(self.attributes)
+        _new._associate_audits(self.id)
+      rescue
+        raise "Error when restoring record."
+      end
+    else
+      raise TypeError, "AuditedRecord: Method undefined for existing objects"
+    end
+  end
+
+  def self.restore(params)
+    begin
+      record, _id = _generate_record(params)
+      _new = self.create(record.attributes)
+      _new._associate_audits(_id)
+    rescue
+      if !audits.blank? && !_id.blank?
+        audits.each do |audit|
+          audit.auditable_id = _id
+          audit.save
+        end
+      end
+      raise "Error when restoring record"
+    end
+  end
+
+  def revert(params)
+    begin
+      _current = self.dup
+      record, _id = _generate_record(params)
+      self = record.attributes
+      if self.save
+        redirect_to url_for(self)
+      else
+        self = _current.attributes
+        raise "Error when reverting record"
+      end
+    rescue
+      raise "Error when reverting record"
+    end
+  end
+
+  private
+
+  def _generate_record(params)
+    begin
+      object = self.new
+      if !params[:audit].blank? && params.class.to_s =~ /hash/i
+        audit = params[:audit]
+      elsif !params[:id].blank? && params.class.to_s =~ /hash/i
+        if !params[:version].blank?
+          audit = Audit.find_by_auditable_type_and_auditable_id_and_version(self.to_s.underscore,params[:id],params[:version])
+        else
+          audit = Audit.find_by_auditable_type_and_auditable_id(self.to_s.underscore,params[:id], :order => "version DESC")
+        end
+      elsif !params.blank? && params.class.to_s =~ /Fixnum/i
+        audit = Audit.find_by_auditable_type_and_auditable_id(self.to_s.underscore,params.to_i, :order => "version DESC")
+      else
+        raise "Need to specify id or audit object."
+      end
+      if (self.find(audit.auditable_id.to_i) rescue false)
+        self.find(audit.auditable_id.to_i).attributes.reject{|k,v| k == "id"}.each do |attribute, value|
+          object[attribute.to_sym] = value
+        end
+      end
+      records = Audit.find_all_by_auditable_id_and_auditable_type(audit.auditable_id,audit.auditable_type, :order => "version ASC")
+      records.reject!{|record| record.version > audit.version }
+      records.each do |record|
+        record.audited_changes.each do |key,value|
+          if record.action == "update"
+            object[key.to_sym] = value[1]
+          else
+            object[key.to_sym] = value
+          end
+        end
+      end
+      return object, audit.id
+    rescue
+      raise "Error when generating record"
+    end
+  end
+
+  def _associate_audits(_id)
+    audits = Audit.find_all_by_auditable_type_and_auditable_id(self.class.to_s, _id)
+    audits.each do |audit|
+      audit.auditable_id = self.id
+      audit.save
+    end
   end
 
 end
